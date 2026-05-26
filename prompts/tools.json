@@ -1,0 +1,33 @@
+[
+  {
+    "name": "search_flights",
+    "description": "Search for available flights between two airports using live data. Use whenever the user asks about flights, prices, routes, or travel options. Convert city names to IATA airport codes before calling. Examples: Berlin to BER, Frankfurt to FRA, Munich to MUC, New York to JFK, London to LHR, Tokyo to NRT, Paris to CDG, Stuttgart to STR.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "IATA code of the departure airport, e.g. BER"
+        },
+        "destination": {
+          "type": "string",
+          "description": "IATA code of the arrival airport, e.g. JFK"
+        },
+        "outbound_date": {
+          "type": "string",
+          "description": "Departure date in YYYY-MM-DD format"
+        },
+        "trip_type": {
+          "type": "string",
+          "enum": ["one_way", "round_trip"],
+          "description": "Whether this is a one-way or round-trip flight"
+        },
+        "return_date": {
+          "type": "string",
+          "description": "Return date in YYYY-MM-DD format, required only for round trips"
+        }
+      },
+      "required": ["origin", "destination", "outbound_date", "trip_type"]
+    }
+  }
+]
