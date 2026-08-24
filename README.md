@@ -36,7 +36,14 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
 
-cp .env.example .env            # add your API keys
+Before running the app, create a `.env` file in the project root.
+
+Add your API keys:
+
+```env
+ANTHROPIC_API_KEY=your_anthropic_api_key
+SERPAPI_KEY=your_serpapi_key
+
 python app.py
 ```
 

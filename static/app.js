@@ -1,8 +1,33 @@
-const messages = [];
-
 const chatWindow = document.getElementById("chat-window");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
+
+const threadId = getOrCreateThreadId();
+loadHistory();
+
+function getOrCreateThreadId() {
+  let id = localStorage.getItem("flight-agent-thread-id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("flight-agent-thread-id", id);
+  }
+  return id;
+}
+
+async function loadHistory() {
+  try {
+    const response = await fetch(`/history/${threadId}`);
+    const data = await response.json();
+    if (data.messages && data.messages.length > 0) {
+      document.getElementById("welcome")?.remove();
+      for (const msg of data.messages) {
+        appendMessage(msg.role, msg.content);
+      }
+    }
+  } catch {
+    // No history yet, or server unreachable — keep the welcome message.
+  }
+}
 
 userInput.addEventListener("input", () => {
   userInput.style.height = "auto";
@@ -27,7 +52,6 @@ async function sendMessage() {
   setInputEnabled(false);
 
   appendMessage("user", text);
-  messages.push({ role: "user", content: text });
 
   const typing = showTyping();
 
@@ -35,14 +59,13 @@ async function sendMessage() {
     const response = await fetch("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ thread_id: threadId, message: text }),
     });
     const data = await response.json();
     typing.remove();
 
     if (data.status === "success") {
       appendMessage("agent", data.message);
-      messages.push({ role: "assistant", content: data.message });
     } else {
       appendMessage("agent", `Something went wrong: ${data.message}`);
     }
