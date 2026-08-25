@@ -64,6 +64,23 @@ header {
   border-radius: 20px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+button.header-tag {
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+button.header-tag:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
 /* ── Main chat window ────────────────────────────────────── */
 main {
   flex: 1;

@@ -1,9 +1,25 @@
 const chatWindow = document.getElementById("chat-window");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
+const newChatBtn = document.getElementById("new-chat-btn");
 
-const threadId = getOrCreateThreadId();
+const welcomeHTML = chatWindow.innerHTML; 
+
+let threadId = getOrCreateThreadId();
 loadHistory();
+
+if (newChatBtn) {
+  newChatBtn.addEventListener("click", startNewConversation);
+} else {
+  console.warn('New chat button not found (expected an element with id="new-chat-btn") — skipping.');
+}
+
+function startNewConversation() {
+  threadId = crypto.randomUUID();
+  localStorage.setItem("flight-agent-thread-id", threadId);
+  chatWindow.innerHTML = welcomeHTML;
+  userInput.focus();
+}
 
 function getOrCreateThreadId() {
   let id = localStorage.getItem("flight-agent-thread-id");
