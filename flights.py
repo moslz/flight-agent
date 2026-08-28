@@ -8,6 +8,7 @@ SERPAPI_URL = "https://serpapi.com/search"
 REQUEST_TIMEOUT = 15
 
 TRIP_TYPE_CODES = {"one_way": "2", "round_trip": "1"}
+CABIN_CLASS_CODES = {"economy": "1", "premium_economy": "2", "business": "3", "first": "4"}
 
 
 class FlightSearchError(Exception):
@@ -32,7 +33,15 @@ def _parse_flight_group(group: dict, origin: str, destination: str, is_best: boo
     }
 
 
-def search_flights(origin, destination, outbound_date, trip_type="one_way", return_date=None):
+def search_flights(
+    origin,
+    destination,
+    outbound_date,
+    trip_type="one_way",
+    return_date=None,
+    cabin_class="economy",
+    passengers=1,
+):
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         raise FlightSearchError("SERPAPI_KEY is not configured.")
@@ -43,6 +52,8 @@ def search_flights(origin, destination, outbound_date, trip_type="one_way", retu
         "arrival_id": destination.upper(),
         "outbound_date": outbound_date,
         "type": TRIP_TYPE_CODES.get(trip_type, "2"),
+        "travel_class": CABIN_CLASS_CODES.get(cabin_class, "1"),
+        "adults": passengers,
         "currency": CURRENCY,
         "hl": "en",
         "api_key": api_key,
@@ -68,6 +79,8 @@ def search_flights(origin, destination, outbound_date, trip_type="one_way", retu
             "origin": origin.upper(),
             "destination": destination.upper(),
             "date": outbound_date,
+            "cabin_class": cabin_class,
+            "passengers": passengers,
             "flights": [],
             "message": f"No flights found from {origin.upper()} to {destination.upper()} on {outbound_date}.",
         }
@@ -85,6 +98,8 @@ def search_flights(origin, destination, outbound_date, trip_type="one_way", retu
         "destination": destination.upper(),
         "date": outbound_date,
         "trip_type": trip_type,
+        "cabin_class": cabin_class,
+        "passengers": passengers,
         "total_found": len(groups),
         "flights": flights,
     }

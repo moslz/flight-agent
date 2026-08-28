@@ -1,5 +1,4 @@
 import json
-
 import operator
 from typing import Annotated
 
@@ -23,6 +22,8 @@ _TOOL_HANDLERS = {
         outbound_date=args["outbound_date"],
         trip_type=args.get("trip_type", "one_way"),
         return_date=args.get("return_date"),
+        cabin_class=args.get("cabin_class", "economy"),
+        passengers=args.get("passengers", 1),
     ),
 }
 
@@ -39,8 +40,6 @@ def _dispatch_tool(name, args):
 
 def _extract_text(content):
     return "".join(block.text for block in content if getattr(block, "type", None) == "text")
-
-
 
 
 class AgentState(TypedDict):
@@ -114,4 +113,3 @@ def get_history(thread_id: str) -> list:
             if text:
                 history.append({"role": "agent", "content": text})
     return history 
-

@@ -25,6 +25,16 @@
         "return_date": {
           "type": "string",
           "description": "Return date in YYYY-MM-DD format, required only for round trips"
+        },
+        "cabin_class": {
+          "type": "string",
+          "enum": ["economy", "premium_economy", "business", "first"],
+          "description": "Cabin class to search. If the user doesn't mention one, omit this field and economy will be used."
+        },
+        "passengers": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of adult passengers. If the user doesn't mention a number, omit this field and 1 will be used."
         }
       },
       "required": ["origin", "destination", "outbound_date", "trip_type"]
