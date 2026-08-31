@@ -129,5 +129,12 @@ function setInputEnabled(enabled) {
 function formatText(text) {
   return text
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/https?:\/\/[^\s<]+/g, (match) => {
+      
+      const trailing = match.match(/[).,;:!?\]]+$/);
+      const url = trailing ? match.slice(0, -trailing[0].length) : match;
+      const suffix = trailing ? trailing[0] : "";
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${suffix}`;
+    })
     .replace(/\n/g, "<br>");
 }

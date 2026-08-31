@@ -9,7 +9,7 @@ from langgraph.checkpoint.memory import MemorySaver
 import anthropic
 
 from config import MODEL, MAX_TOKENS, load_system_prompt, load_tools
-from flights import search_flights, FlightSearchError
+from flights import search_flights, get_booking_options, FlightSearchError 
 
 _client = anthropic.Anthropic()
 _system_prompt = load_system_prompt()
@@ -17,6 +17,16 @@ _tools = load_tools()
 
 _TOOL_HANDLERS = {
     "search_flights": lambda args: search_flights(
+        origin=args["origin"],
+        destination=args["destination"],
+        outbound_date=args["outbound_date"],
+        trip_type=args.get("trip_type", "one_way"),
+        return_date=args.get("return_date"),
+        cabin_class=args.get("cabin_class", "economy"),
+        passengers=args.get("passengers", 1),
+    ),
+    "get_booking_options": lambda args: get_booking_options(
+        booking_token=args["booking_token"],
         origin=args["origin"],
         destination=args["destination"],
         outbound_date=args["outbound_date"],
@@ -33,8 +43,11 @@ def _dispatch_tool(name, args):
     if handler is None:
         return {"error": f"Unknown tool: {name}"}
     try:
-        return handler(args)
+        result = handler(args)
+        print(f"[TOOL LOG] {name}({args}) -> {result}")
+        return result
     except FlightSearchError as exc:
+        print(f"[TOOL LOG] {name}({args}) -> FlightSearchError: {exc}")
         return {"error": str(exc)}
 
 

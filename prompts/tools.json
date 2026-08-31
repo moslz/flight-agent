@@ -39,5 +39,50 @@
       },
       "required": ["origin", "destination", "outbound_date", "trip_type"]
     }
+  },
+  {
+    "name": "get_booking_options",
+    "description": "Get real ways to book one specific flight the user has picked from a previous search_flights result — a seller name, price, and either a clickable booking link or a phone number. Call this only after the user has clearly picked one specific flight from results already shown, not as part of an initial search.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "booking_token": {
+          "type": "string",
+          "description": "The booking_token of the specific flight the user selected. Copy it exactly from that flight's entry in the earlier search_flights result — never guess or construct one."
+        },
+        "origin": {
+          "type": "string",
+          "description": "IATA code of the departure airport — must match the original search_flights call this flight came from"
+        },
+        "destination": {
+          "type": "string",
+          "description": "IATA code of the arrival airport — must match the original search_flights call this flight came from"
+        },
+        "outbound_date": {
+          "type": "string",
+          "description": "Departure date in YYYY-MM-DD format — must match the original search_flights call this flight came from"
+        },
+        "trip_type": {
+          "type": "string",
+          "enum": ["one_way", "round_trip"],
+          "description": "Must match the original search_flights call this flight came from"
+        },
+        "return_date": {
+          "type": "string",
+          "description": "Return date in YYYY-MM-DD format, only for round trips — must match the original search_flights call this flight came from"
+        },
+        "cabin_class": {
+          "type": "string",
+          "enum": ["economy", "premium_economy", "business", "first"],
+          "description": "Must match the original search_flights call this flight came from. Omit if that search didn't specify one."
+        },
+        "passengers": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Must match the original search_flights call this flight came from. Omit if that search didn't specify one."
+        }
+      },
+      "required": ["booking_token", "origin", "destination", "outbound_date", "trip_type"]
+    }
   }
 ]
