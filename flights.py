@@ -18,11 +18,9 @@ CABIN_CLASS_CODES = {"economy": "1", "premium_economy": "2", "business": "3", "f
 class FlightSearchError(Exception):
     pass
 
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 def _request_with_retry(params):
-    """GET the SerpAPI endpoint, retrying once on transient network failures
-    (timeout, connection drop). Does not retry on non-transient errors like a
-    bad API key or malformed request — a retry would just fail the same way."""
     last_error = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -33,6 +31,14 @@ def _request_with_retry(params):
             last_error = FlightSearchError("The flight provider did not respond in time.")
         except requests.exceptions.ConnectionError:
             last_error = FlightSearchError("Could not connect to the flight provider.")
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status in RETRYABLE_STATUS_CODES:
+                last_error = FlightSearchError(
+                    f"The flight provider returned a temporary error ({status})."
+                )
+            else:
+                raise FlightSearchError(f"Flight provider request failed: {exc}")
         except requests.exceptions.RequestException as exc:
             raise FlightSearchError(f"Flight provider request failed: {exc}")
 
@@ -139,10 +145,6 @@ def get_booking_options(
     cabin_class="economy",
     passengers=1,
 ):
-    """Resolve a specific flight's booking_token into real ways to book it:
-    a seller name, a price, and either a bookable link or a phone number.
-    Requires the same search parameters as the original search_flights call —
-    SerpAPI ties the booking_token to that exact query context."""
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         raise FlightSearchError("SERPAPI_KEY is not configured.")
@@ -170,32 +172,38 @@ def get_booking_options(
     if not raw_options:
         return {"options": [], "message": "No booking options were returned for this flight."}
 
-    options = []
-    for i, opt in enumerate(raw_options, start=1):
-        
-        if opt.get("separate_tickets") and opt.get("departing"):
-            leg = opt["departing"]
-        else:
-            leg = opt.get("together") or opt.get("departing")
-        if not leg:
-            continue
-
+    def _make_entry(leg: dict, leg_label=None) -> dict:
         entry = {
-            "option": i,
             "book_with": leg.get("book_with", "Unknown seller"),
             "price": leg.get("price"),
         }
+        if leg_label:
+            entry["leg"] = leg_label
         if leg.get("option_title"):
             entry["fare_type"] = leg["option_title"]
 
         booking_request = leg.get("booking_request")
-        if booking_request and booking_request.get("post_data"):
+        if booking_request and booking_request.get("post_data") and booking_request.get("url"):
             entry["booking_link"] = booking_links.create_link(
                 booking_request["url"], booking_request["post_data"]
             )
         elif leg.get("booking_phone"):
             entry["booking_phone"] = leg["booking_phone"]
+        else:
+            entry["no_direct_booking"] = True
 
-        options.append(entry)
+        return entry
+
+    options = []
+    for opt in raw_options:
+        if opt.get("separate_tickets"):
+            if opt.get("departing"):
+                options.append(_make_entry(opt["departing"], "outbound"))
+            if opt.get("returning"):
+                options.append(_make_entry(opt["returning"], "return"))
+        else:
+            leg = opt.get("together") or opt.get("departing")
+            if leg:
+                options.append(_make_entry(leg, None))
 
     return {"options": options}

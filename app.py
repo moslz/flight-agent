@@ -1,10 +1,16 @@
 from urllib.parse import unquote_plus
 from flask import Flask, render_template, request, jsonify
 
-from agent import chat, get_history
+from agent import chat, get_history, get_pending_interrupt, resume
 import booking_links
 
 app = Flask(__name__)
+
+
+def _format_agent_result(result: dict) -> dict:
+    if result["type"] == "interrupt":
+        return {"status": "interrupt", "interrupt": result["payload"]}
+    return {"status": "success", "message": result["text"]}
 
 
 @app.route("/")
@@ -23,15 +29,36 @@ def chat_endpoint():
         return jsonify({"status": "error", "message": "Empty message"}), 400
 
     try:
-        reply = chat(message, thread_id)
-        return jsonify({"status": "success", "message": reply})
+        result = chat(message, thread_id)
+        return jsonify(_format_agent_result(result))
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/resume", methods=["POST"])
+def resume_endpoint():
+    data = request.json or {}
+    thread_id = data.get("thread_id")
+    payload = data.get("payload")
+
+    if not thread_id:
+        return jsonify({"status": "error", "message": "Missing thread_id"}), 400
+    if payload is None:
+        return jsonify({"status": "error", "message": "Missing payload"}), 400
+
+    try:
+        result = resume(payload, thread_id)
+        return jsonify(_format_agent_result(result))
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 @app.route("/history/<thread_id>")
 def history_endpoint(thread_id):
-    return jsonify({"messages": get_history(thread_id)})
+    return jsonify({
+        "messages": get_history(thread_id),
+        "pending_interrupt": get_pending_interrupt(thread_id),
+    })
 
 
 @app.route("/book/<link_id>")

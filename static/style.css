@@ -1,4 +1,3 @@
-/* ── Reset & base ───────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -28,7 +27,6 @@ html, body {
   flex-direction: column;
 }
 
-/* ── Header ─────────────────────────────────────────────── */
 header {
   display: flex;
   align-items: center;
@@ -81,7 +79,6 @@ button.header-tag:hover {
   color: var(--text);
 }
 
-/* ── Main chat window ────────────────────────────────────── */
 main {
   flex: 1;
   overflow-y: auto;
@@ -98,7 +95,6 @@ main {
   gap: 20px;
 }
 
-/* ── Messages ────────────────────────────────────────────── */
 .message {
   display: flex;
   animation: fadeUp 0.25s ease both;
@@ -109,7 +105,6 @@ main {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Agent messages — left aligned */
 .agent-message { justify-content: flex-start; }
 
 .agent-message .message-bubble {
@@ -120,7 +115,6 @@ main {
   max-width: 82%;
 }
 
-/* User messages — right aligned */
 .user-message { justify-content: flex-end; }
 
 .user-message .message-bubble {
@@ -132,7 +126,6 @@ main {
   color: var(--text);
 }
 
-/* Hint text in welcome message */
 .hint {
   margin-top: 10px;
   font-family: var(--font-mono);
@@ -145,7 +138,6 @@ main {
   font-style: normal;
 }
 
-/* ── Typing indicator ────────────────────────────────────── */
 .typing-indicator {
   display: flex;
   align-items: center;
@@ -173,7 +165,6 @@ main {
   40%           { opacity: 1;   transform: scale(1.1); }
 }
 
-/* ── Footer input ────────────────────────────────────────── */
 footer {
   border-top: 1px solid var(--border);
   background: var(--surface);
@@ -235,7 +226,6 @@ textarea::placeholder { color: var(--text-dim); }
 
 #send-btn svg { width: 16px; height: 16px; }
 
-/* ── Agent message content formatting ───────────────────── */
 .agent-message p { margin-bottom: 8px; }
 .agent-message p:last-child { margin-bottom: 0; }
 
@@ -244,13 +234,90 @@ textarea::placeholder { color: var(--text-dim); }
   font-weight: 600;
 }
 
-/* Flight result formatting */
 .agent-message .message-bubble {
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* Scrollbar */
+.choice-card {
+  background: var(--agent-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px var(--radius) var(--radius) var(--radius);
+  padding: 16px 18px;
+  max-width: 82%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choice-card-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.choice-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.choice-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.choice-btn-label {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.choice-btn-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.choice-btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.choice-btn-row .choice-btn {
+  width: auto;
+  flex: 1;
+  align-items: center;
+  text-align: center;
+}
+
+.choice-btn-confirm {
+  border-color: var(--accent-dim);
+}
+
+.choice-btn-confirm .choice-btn-label,
+.choice-btn-confirm {
+  color: var(--accent);
+}
+
+.choice-btn-cancel {
+  color: var(--text-dim);
+}
+
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
