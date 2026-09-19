@@ -10,12 +10,14 @@ from langgraph.types import interrupt, Command
 import anthropic
 
 from config import MODEL, MAX_TOKENS, load_system_prompt, load_tools
-from flights import search_flights, get_booking_options, FlightSearchError
+from flights import search_flights, search_return_flights, get_booking_options, FlightSearchError
 from budget_search import search_budget_carriers
 
 _client = anthropic.Anthropic()
 _system_prompt = load_system_prompt()
 _tools = load_tools()
+
+# SEARCH_TOOLS is for frontend UI/ Human-in-the-loop interrupt system. 
 
 SEARCH_TOOLS = {
     "google_flights": {
@@ -36,6 +38,8 @@ SEARCH_TOOLS = {
     },
 }
 
+# _TOOL_HANDLERS maps tool names to their corresponding functions, allowing for dynamic dispatch of tool calls based on user input.
+
 _TOOL_HANDLERS = {
     "search_flights": lambda args: search_flights(
         origin=args["origin"],
@@ -55,6 +59,15 @@ _TOOL_HANDLERS = {
         cabin_class=args.get("cabin_class", "economy"),
         passengers=args.get("passengers", 1),
     ),
+    "search_return_flights": lambda args: search_return_flights(
+        departure_token=args["departure_token"],
+        origin=args["origin"],
+        destination=args["destination"],
+        outbound_date=args["outbound_date"],
+        return_date=args["return_date"],
+        cabin_class=args.get("cabin_class", "economy"),
+        passengers=args.get("passengers", 1),
+    ),
     "get_booking_options": lambda args: get_booking_options(
         booking_token=args["booking_token"],
         origin=args["origin"],
@@ -67,6 +80,8 @@ _TOOL_HANDLERS = {
     ),
 }
 
+# Without _dispatch_tool, an error in any tool execution would raise a unhandled Python exception, 
+# crashing the entire server or ending the chat session.
 
 def _dispatch_tool(name, args):
     handler = _TOOL_HANDLERS.get(name)
@@ -83,6 +98,9 @@ def _dispatch_tool(name, args):
         print(f"[TOOL LOG] {name}({args}) -> {type(exc).__name__}: {exc}")
         return {"error": f"Could not process this request: {exc}"}
 
+
+# If Claude outputs a response that mixes text and a tool request in the same turn 
+# this function filters out all metadata and tool objects, returning only the human-readable text.
 
 def _extract_text(content):
     return "".join(block.text for block in content if getattr(block, "type", None) == "text")
@@ -104,7 +122,8 @@ def _find_flight_context(state, booking_token):
                 data = json.loads(block["content"])
             except (TypeError, ValueError, KeyError):
                 continue
-            for flight in data.get("flights", []):
+            candidates = data.get("flights", []) + data.get("return_flights", [])
+            for flight in candidates:
                 if flight.get("booking_token") == booking_token:
                     return flight
     return None
@@ -124,13 +143,13 @@ def call_model(state: AgentState) -> dict:
     )
     return {"messages": [{"role": "assistant", "content": response.content}]}
 
-
+# Evaluates the model's latest output to route execution either to the tool action node or to the end.
 def route_after_model(state: AgentState) -> str:
     last_content = state["messages"][-1]["content"]
     has_tool_use = any(getattr(block, "type", None) == "tool_use" for block in last_content)
     return "action" if has_tool_use else END
 
-
+# Pauses execution to let the user select a flight search engine before executing the query.
 def _run_search_with_gate(args: dict) -> dict:
     choice = interrupt({
         "type": "search_tool_choice",
@@ -148,7 +167,7 @@ def _run_search_with_gate(args: dict) -> dict:
         return _dispatch_tool("search_budget_carriers", args)
     return _dispatch_tool("search_flights", args)
 
-
+# Pauses execution to present flight details to the user and request confirmation before retrieving booking links.
 def _run_booking_with_gate(state: AgentState, args: dict) -> dict:
     flight = _find_flight_context(state, args.get("booking_token"))
     confirm = interrupt({
@@ -159,7 +178,7 @@ def _run_booking_with_gate(state: AgentState, args: dict) -> dict:
         return {"cancelled": True, "message": "Booking lookup was cancelled by the user."}
     return _dispatch_tool("get_booking_options", args)
 
-
+# Extracts and executes requested tool calls, applying user-approval gates before returning formatted results.
 def call_tool(state: AgentState) -> dict:
     last_content = state["messages"][-1]["content"]
     tool_use = next(b for b in last_content if b.type == "tool_use")
@@ -193,14 +212,15 @@ graph.add_edge("action", "agent")
 _checkpointer = MemorySaver()
 _compiled = graph.compile(checkpointer=_checkpointer)
 
-
+# This helper function converts raw LangGraph execution results into a consistent,
+# predictable dictionary structure for your API or web frontend to consume.
 def _package(result) -> dict:
     pending = result.get("__interrupt__")
     if pending:
         return {"type": "interrupt", "payload": pending[0].value}
     return {"type": "final", "text": _extract_text(result["messages"][-1]["content"])}
 
-
+# This function serves as the main entry point for user interaction with agent.
 def chat(user_message: str, thread_id: str) -> dict:
     config = {"configurable": {"thread_id": thread_id}}
     result = _compiled.invoke(
@@ -209,7 +229,7 @@ def chat(user_message: str, thread_id: str) -> dict:
     )
     return _package(result)
 
-
+# Resumes execution of a paused graph thread
 def resume(payload: dict, thread_id: str) -> dict:
     config = {"configurable": {"thread_id": thread_id}}
     result = _compiled.invoke(Command(resume=payload), config=config)

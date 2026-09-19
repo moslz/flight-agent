@@ -18,7 +18,9 @@ CABIN_CLASS_CODES = {"economy": "1", "premium_economy": "2", "business": "3", "f
 class FlightSearchError(Exception):
     pass
 
+
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
 
 def _request_with_retry(params):
     last_error = None
@@ -64,6 +66,7 @@ def _parse_flight_group(group: dict, origin: str, destination: str, is_best: boo
         "price": group.get("price", 0),
         "is_best": is_best,
         "booking_token": group.get("booking_token"),
+        "departure_token": group.get("departure_token"),
     }
 
 
@@ -132,6 +135,69 @@ def search_flights(
         "passengers": passengers,
         "total_found": len(groups),
         "flights": flights,
+    }
+
+
+def search_return_flights(
+    departure_token,
+    origin,
+    destination,
+    outbound_date,
+    return_date,
+    cabin_class="economy",
+    passengers=1,
+):
+    api_key = os.getenv("SERPAPI_KEY")
+    if not api_key:
+        raise FlightSearchError("SERPAPI_KEY is not configured.")
+
+    params = {
+        "engine": "google_flights",
+        "departure_id": origin.upper(),
+        "arrival_id": destination.upper(),
+        "outbound_date": outbound_date,
+        "return_date": return_date,
+        "type": TRIP_TYPE_CODES["round_trip"],
+        "travel_class": CABIN_CLASS_CODES.get(cabin_class, "1"),
+        "adults": passengers,
+        "currency": CURRENCY,
+        "hl": "en",
+        "departure_token": departure_token,
+        "api_key": api_key,
+    }
+
+    response = _request_with_retry(params)
+    payload = response.json()
+
+    best = payload.get("best_flights", [])
+    others = payload.get("other_flights", [])
+    groups = best + others
+
+    if not groups:
+        return {
+            "origin": origin.upper(),
+            "destination": destination.upper(),
+            "return_date": return_date,
+            "return_flights": [],
+            "message": "No return flight combinations were found for this outbound flight.",
+        }
+
+    best_ids = {id(g) for g in best}
+    return_flights = [
+        _parse_flight_group(g, destination, origin, id(g) in best_ids)
+        for g in groups[:MAX_RESULTS]
+        if g.get("flights")
+    ]
+    return_flights.sort(key=lambda f: f["price"])
+    for i, f in enumerate(return_flights, start=1):
+        f["return_option"] = i
+
+    return {
+        "origin": origin.upper(),
+        "destination": destination.upper(),
+        "outbound_date": outbound_date,
+        "return_date": return_date,
+        "return_flights": return_flights,
     }
 
 
