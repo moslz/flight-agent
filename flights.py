@@ -2,9 +2,18 @@ import os
 import time
 
 import requests
+from pydantic import ValidationError
 
 from config import CURRENCY, MAX_RESULTS
 import booking_links
+from schemas import (
+    BookingOptionsRequest,
+    BookingOptionsResult,
+    FlightSearchRequest,
+    FlightSearchResult,
+    ReturnFlightSearchRequest,
+    ReturnFlightSearchResult,
+)
 
 SERPAPI_URL = "https://serpapi.com/search"
 REQUEST_TIMEOUT = 15
@@ -79,24 +88,37 @@ def search_flights(
     cabin_class="economy",
     passengers=1,
 ):
+    try:
+        req = FlightSearchRequest(
+            origin=origin,
+            destination=destination,
+            outbound_date=outbound_date,
+            trip_type=trip_type,
+            return_date=return_date,
+            cabin_class=cabin_class,
+            passengers=passengers,
+        )
+    except ValidationError as exc:
+        raise FlightSearchError(f"Invalid search parameters: {exc}")
+
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         raise FlightSearchError("SERPAPI_KEY is not configured.")
 
     params = {
         "engine": "google_flights",
-        "departure_id": origin.upper(),
-        "arrival_id": destination.upper(),
-        "outbound_date": outbound_date,
-        "type": TRIP_TYPE_CODES.get(trip_type, "2"),
-        "travel_class": CABIN_CLASS_CODES.get(cabin_class, "1"),
-        "adults": passengers,
+        "departure_id": req.origin,
+        "arrival_id": req.destination,
+        "outbound_date": req.outbound_date,
+        "type": TRIP_TYPE_CODES.get(req.trip_type, "2"),
+        "travel_class": CABIN_CLASS_CODES.get(req.cabin_class, "1"),
+        "adults": req.passengers,
         "currency": CURRENCY,
         "hl": "en",
         "api_key": api_key,
     }
-    if trip_type == "round_trip" and return_date:
-        params["return_date"] = return_date
+    if req.trip_type == "round_trip" and req.return_date:
+        params["return_date"] = req.return_date
 
     response = _request_with_retry(params)
 
@@ -106,19 +128,19 @@ def search_flights(
     groups = best + others
 
     if not groups:
-        return {
-            "origin": origin.upper(),
-            "destination": destination.upper(),
-            "date": outbound_date,
-            "cabin_class": cabin_class,
-            "passengers": passengers,
-            "flights": [],
-            "message": f"No flights found from {origin.upper()} to {destination.upper()} on {outbound_date}.",
-        }
+        return FlightSearchResult(
+            origin=req.origin,
+            destination=req.destination,
+            date=req.outbound_date,
+            cabin_class=req.cabin_class,
+            passengers=req.passengers,
+            flights=[],
+            message=f"No flights found from {req.origin} to {req.destination} on {req.outbound_date}.",
+        ).model_dump(exclude_none=True)
 
     best_ids = {id(g) for g in best}
     flights = [
-        _parse_flight_group(g, origin, destination, id(g) in best_ids)
+        _parse_flight_group(g, req.origin, req.destination, id(g) in best_ids)
         for g in groups[:MAX_RESULTS]
         if g.get("flights")
     ]
@@ -126,16 +148,16 @@ def search_flights(
     for i, f in enumerate(flights, start=1):
         f["option"] = i
 
-    return {
-        "origin": origin.upper(),
-        "destination": destination.upper(),
-        "date": outbound_date,
-        "trip_type": trip_type,
-        "cabin_class": cabin_class,
-        "passengers": passengers,
-        "total_found": len(groups),
-        "flights": flights,
-    }
+    return FlightSearchResult(
+        origin=req.origin,
+        destination=req.destination,
+        date=req.outbound_date,
+        trip_type=req.trip_type,
+        cabin_class=req.cabin_class,
+        passengers=req.passengers,
+        total_found=len(groups),
+        flights=flights,
+    ).model_dump(exclude_none=True)
 
 
 def search_return_flights(
@@ -147,22 +169,35 @@ def search_return_flights(
     cabin_class="economy",
     passengers=1,
 ):
+    try:
+        req = ReturnFlightSearchRequest(
+            departure_token=departure_token,
+            origin=origin,
+            destination=destination,
+            outbound_date=outbound_date,
+            return_date=return_date,
+            cabin_class=cabin_class,
+            passengers=passengers,
+        )
+    except ValidationError as exc:
+        raise FlightSearchError(f"Invalid return-flight request: {exc}")
+
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         raise FlightSearchError("SERPAPI_KEY is not configured.")
 
     params = {
         "engine": "google_flights",
-        "departure_id": origin.upper(),
-        "arrival_id": destination.upper(),
-        "outbound_date": outbound_date,
-        "return_date": return_date,
+        "departure_id": req.origin,
+        "arrival_id": req.destination,
+        "outbound_date": req.outbound_date,
+        "return_date": req.return_date,
         "type": TRIP_TYPE_CODES["round_trip"],
-        "travel_class": CABIN_CLASS_CODES.get(cabin_class, "1"),
-        "adults": passengers,
+        "travel_class": CABIN_CLASS_CODES.get(req.cabin_class, "1"),
+        "adults": req.passengers,
         "currency": CURRENCY,
         "hl": "en",
-        "departure_token": departure_token,
+        "departure_token": req.departure_token,
         "api_key": api_key,
     }
 
@@ -174,17 +209,17 @@ def search_return_flights(
     groups = best + others
 
     if not groups:
-        return {
-            "origin": origin.upper(),
-            "destination": destination.upper(),
-            "return_date": return_date,
-            "return_flights": [],
-            "message": "No return flight combinations were found for this outbound flight.",
-        }
+        return ReturnFlightSearchResult(
+            origin=req.origin,
+            destination=req.destination,
+            return_date=req.return_date,
+            return_flights=[],
+            message="No return flight combinations were found for this outbound flight.",
+        ).model_dump(exclude_none=True)
 
     best_ids = {id(g) for g in best}
     return_flights = [
-        _parse_flight_group(g, destination, origin, id(g) in best_ids)
+        _parse_flight_group(g, req.destination, req.origin, id(g) in best_ids)
         for g in groups[:MAX_RESULTS]
         if g.get("flights")
     ]
@@ -192,13 +227,13 @@ def search_return_flights(
     for i, f in enumerate(return_flights, start=1):
         f["return_option"] = i
 
-    return {
-        "origin": origin.upper(),
-        "destination": destination.upper(),
-        "outbound_date": outbound_date,
-        "return_date": return_date,
-        "return_flights": return_flights,
-    }
+    return ReturnFlightSearchResult(
+        origin=req.origin,
+        destination=req.destination,
+        outbound_date=req.outbound_date,
+        return_date=req.return_date,
+        return_flights=return_flights,
+    ).model_dump(exclude_none=True)
 
 
 def get_booking_options(
@@ -211,32 +246,48 @@ def get_booking_options(
     cabin_class="economy",
     passengers=1,
 ):
+    try:
+        req = BookingOptionsRequest(
+            booking_token=booking_token,
+            origin=origin,
+            destination=destination,
+            outbound_date=outbound_date,
+            trip_type=trip_type,
+            return_date=return_date,
+            cabin_class=cabin_class,
+            passengers=passengers,
+        )
+    except ValidationError as exc:
+        raise FlightSearchError(f"Invalid booking request: {exc}")
+
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         raise FlightSearchError("SERPAPI_KEY is not configured.")
 
     params = {
         "engine": "google_flights",
-        "departure_id": origin.upper(),
-        "arrival_id": destination.upper(),
-        "outbound_date": outbound_date,
-        "type": TRIP_TYPE_CODES.get(trip_type, "2"),
-        "travel_class": CABIN_CLASS_CODES.get(cabin_class, "1"),
-        "adults": passengers,
+        "departure_id": req.origin,
+        "arrival_id": req.destination,
+        "outbound_date": req.outbound_date,
+        "type": TRIP_TYPE_CODES.get(req.trip_type, "2"),
+        "travel_class": CABIN_CLASS_CODES.get(req.cabin_class, "1"),
+        "adults": req.passengers,
         "currency": CURRENCY,
         "hl": "en",
-        "booking_token": booking_token,
+        "booking_token": req.booking_token,
         "api_key": api_key,
     }
-    if trip_type == "round_trip" and return_date:
-        params["return_date"] = return_date
+    if req.trip_type == "round_trip" and req.return_date:
+        params["return_date"] = req.return_date
 
     response = _request_with_retry(params)
     payload = response.json()
 
     raw_options = payload.get("booking_options", [])
     if not raw_options:
-        return {"options": [], "message": "No booking options were returned for this flight."}
+        return BookingOptionsResult(
+            options=[], message="No booking options were returned for this flight."
+        ).model_dump(exclude_none=True)
 
     def _make_entry(leg: dict, leg_label=None) -> dict:
         entry = {
@@ -272,4 +323,4 @@ def get_booking_options(
             if leg:
                 options.append(_make_entry(leg, None))
 
-    return {"options": options}
+    return BookingOptionsResult(options=options).model_dump(exclude_none=True)
